@@ -1,0 +1,10 @@
+#!/bin/bash
+
+jq -r '
+def format_number:
+  tostring | if test("\\.0$") then rtrimstr(".0") else . end;
+
+(.name | .[0:1] | ascii_upcase + .[1:]) as $name |
+(.types[0].type.name | .[0:1] | ascii_upcase + .[1:]) as $type |
+"\($name) is of type \($type), weighs \( (.weight / 10 | format_number) )kg, and is \( (.height / 10 | format_number) )m tall."
+' data.json
