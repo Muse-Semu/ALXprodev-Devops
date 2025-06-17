@@ -1,10 +1,18 @@
 #!/bin/bash
 
-jq -r '
-def format_number:
-  tostring | if test("\\.0$") then rtrimstr(".0") else . end;
+# Extract data using jq
+name=$(jq -r '.name' data.json)
+type=$(jq -r '.types[0].type.name' data.json)
+weight=$(jq -r '.weight' data.json)
+height=$(jq -r '.height' data.json)
 
-(.name | .[0:1] | ascii_upcase + .[1:]) as $name |
-(.types[0].type.name | .[0:1] | ascii_upcase + .[1:]) as $type |
-"\($name) is of type \($type), weighs \( (.weight / 10 | format_number) )kg, and is \( (.height / 10 | format_number) )m tall."
-' data.json
+# Capitalize name and type using sed
+name=$(echo "$name" | sed 's/^\(.\)/\U\1/')
+type=$(echo "$type" | sed 's/^\(.\)/\U\1/')
+
+# Convert and format weight (hectograms to kg) and height (decimeters to m) using awk
+formatted_weight=$(echo "$weight" | awk '{ printf "%.1f", $1/10 }' | sed 's/\.0$//')
+formatted_height=$(echo "$height" | awk '{ printf "%.1f", $1/10 }' | sed 's/\.0$//')
+
+# Output using the specified template
+echo "$name is of type $type, weighs ${formatted_weight}kg, and is ${formatted_height}m tall."
