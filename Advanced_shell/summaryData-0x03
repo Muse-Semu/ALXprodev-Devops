@@ -1,0 +1,59 @@
+#!/bin/bash
+
+# Output CSV file
+CSV_FILE="pokemon_report.csv"
+
+# Directory containing JSON files
+DATA_DIR="pokemon_data"
+
+# Error log file
+ERROR_FILE="errors.txt"
+
+# Clear or create error log
+> "$ERROR_FILE"
+
+# Write CSV header
+echo "Name,Height (m),Weight (kg)" > "$CSV_FILE"
+
+# Process each JSON file in pokemon_data directory
+for file in "$DATA_DIR"/*.json; do
+    if [ -f "$file" ]; then
+        # Extract name, height, and weight using jq
+        name=$(jq -r '.name' "$file" 2>> "$ERROR_FILE")
+        height=$(jq -r '.height' "$file" 2>> "$ERROR_FILE")
+        weight=$(jq -r '.weight' "$file" 2>> "$ERROR_FILE")
+
+        # Capitalize name and convert height (decimeters to meters), weight (hectograms to kg)
+        name=$(echo "$name" | sed 's/^\(.\)/\U\1/')
+        height=$(echo "$height" | awk '{ printf "%.1f", $1/10 }' | sed 's/\.0$//')
+        weight=$(echo "$weight" | awk '{ printf "%.1f", $1/10 }' | sed 's/\.0$//')
+
+        # Append to CSV
+        echo "$name,$height,$weight" >> "$CSV_FILE"
+    fi
+done
+
+# Display the CSV content
+echo "CSV Report generated at: $CSV_FILE"
+cat "$CSV_FILE"
+
+# Calculate and display averages using awk
+awk -F, '
+NR>1 {
+    height_sum += $2;
+    weight_sum += $3;
+    count++;
+}
+END {
+    if (count > 0) {
+        printf "\nAverage Height: %.2f m\n", height_sum/count;
+        printf "Average Weight: %.2f kg\n", weight_sum/count;
+    } else {
+        print "\nNo valid data to calculate averages.";
+    }
+}' "$CSV_FILE"
+
+# Check for errors
+if [ -s "$ERROR_FILE" ]; then
+    echo "Some errors occurred. Check $ERROR_FILE for details."
+fi
