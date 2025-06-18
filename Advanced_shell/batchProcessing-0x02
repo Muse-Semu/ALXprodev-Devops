@@ -18,28 +18,53 @@ ERROR_FILE="errors.txt"
 # Clear or create error log
 > "$ERROR_FILE"
 
-# Loop through each Pokémon
-for pokemon in "${POKEMONS[@]}"; do
+# Maximum number of retries
+MAX_RETRIES=3
+
+# Function to fetch Pokémon data with retry logic
+fetch_pokemon() {
+    local pokemon="$1"
+    local attempt=1
+    local output_file="$OUTPUT_DIR/$pokemon.json"
+    local success=false
+
     echo "Fetching data for $pokemon..."
-    
-    # Make API request and save to file
-    output_file="$OUTPUT_DIR/$pokemon.json"
-    curl -s -o "$output_file" "$POKEAPI_URL/$pokemon" 2>> "$ERROR_FILE"
-    
-    # Check if curl command was successful
-    if [ $? -eq 0 ]; then
-        # Verify if the output file contains valid JSON
-        if jq . "$output_file" > /dev/null 2>> "$ERROR_FILE"; then
-            echo "Saved data to $output_file ✅"
+
+    while [ $attempt -le $MAX_RETRIES ]; do
+        # Make API request
+        curl -s -o "$output_file" "$POKEAPI_URL/$pokemon" 2>> "$ERROR_FILE"
+
+        # Check if curl command was successful
+        if [ $? -eq 0 ]; then
+            # Verify if the output file contains valid JSON
+            if jq . "$output_file" > /dev/null 2>> "$ERROR_FILE"; then
+                echo "Saved data to $output_file ✅"
+                success=true
+                break
+            else
+                echo "$(date '+%Y-%m-%d %H:%M:%S'): Invalid JSON response for $pokemon (Attempt $attempt)" >> "$ERROR_FILE"
+                rm -f "$output_file"
+            fi
         else
-            echo "Error: Invalid JSON response for $pokemon" >> "$ERROR_FILE"
+            echo "$(date '+%Y-%m-%d %H:%M:%S'): Failed to retrieve data for $pokemon (Attempt $attempt)" >> "$ERROR_FILE"
             rm -f "$output_file"
         fi
-    else
-        echo "Error: Failed to retrieve data for $pokemon" >> "$ERROR_FILE"
-        rm -f "$output_file"
+
+        # Increment attempt counter
+        ((attempt++))
+
+        # Delay before retrying
+        [ $attempt -le $MAX_RETRIES ] && sleep 1
+    done
+
+    if [ "$success" = false ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S'): Failed to fetch data for $pokemon after $MAX_RETRIES attempts" >> "$ERROR_FILE"
     fi
-    
-    # Add a 1-second delay to avoid rate-limiting
+}
+
+# Loop through each Pokémon
+for pokemon in "${POKEMONS[@]}"; do
+    fetch_pokemon "$pokemon"
+    # Add a 1-second delay between Pokémon to avoid rate-limiting
     sleep 1
 done
