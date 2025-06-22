@@ -18,6 +18,9 @@ ERROR_FILE="errors.txt"
 # Clear or create error log
 > "$ERROR_FILE"
 
+# Array to store PIDs of background processes
+declare -A PIDS
+
 # Function to fetch Pokémon data
 fetch_pokemon() {
     local pokemon="$1"
@@ -51,11 +54,45 @@ export POKEAPI_URL OUTPUT_DIR ERROR_FILE
 
 # Loop through each Pokémon and run fetch in background
 for pokemon in "${POKEMONS[@]}"; do
+    # Run fetch_pokemon in background and store PID
     fetch_pokemon "$pokemon" &
+    PIDS["$pokemon"]=$!
 done
 
-# Wait for all background processes to complete
+# Monitor background jobs with timeout
+timeout=10  # Timeout in seconds
+start_time=$(date +%s)
+
+while true; do
+    # Check if any jobs are still running
+    if ! jobs >/dev/null 2>&1; then
+        break  # No jobs running, exit loop
+    fi
+
+    # Check for timeout
+    current_time=$(date +%s)
+    elapsed=$((current_time - start_time))
+    if [ $elapsed -ge $timeout ]; then
+        echo "$(date '+%Y-%m-%d %H:%M:%S'): Timeout after $timeout seconds, terminating jobs" >> "$ERROR_FILE"
+        # Kill all running jobs
+        for pid in "${PIDS[@]}"; do
+            if kill -0 "$pid" 2>/dev/null; then
+                echo "$(date '+%Y-%m-%d %H:%M:%S'): Killing process $pid for ${POKEMONS[$i]}" >> "$ERROR_FILE"
+                kill "$pid" 2>> "$ERROR_FILE"
+            fi
+        done
+        break
+    fi
+
+    # Brief delay to avoid busy loop
+    sleep 0.1
+done
+
+# Wait for all background processes to complete (or be killed)
 wait
+
+# Display active jobs (if any remain)
+jobs
 
 # Check for errors
 if [ -s "$ERROR_FILE" ]; then
